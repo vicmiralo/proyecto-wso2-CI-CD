@@ -1,0 +1,70 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_DSN: postgresql://postgres:postgres@db:5432/postgres
+
+  ldap:
+    image: osixia/openldap:latest
+    ports:
+      - "389:389"
+      - "636:636"
+    environment:
+      LDAP_ORGANISATION: "WSO2 Project"
+      LDAP_DOMAIN: "wso2.org"
+      LDAP_ADMIN_PASSWORD: "adminpassword"
+    volumes:
+      - ldap_data:/var/lib/ldap
+      - ldap_config:/etc/ldap/slapd.d
+
+  phpldapadmin:
+    image: osixia/phpldapadmin:latest
+    ports:
+      - "8090:80"
+    environment:
+      PHPLDAPADMIN_LDAP_HOSTS: "ldap"
+      PHPLDAPADMIN_HTTPS: "false"
+    depends_on:
+      - ldap
+
+  wso2apim:
+    image: wso2/wso2am:latest
+    ports:
+      - "9443:9443"   # consola de administración (HTTPS)
+      - "8243:8243"   # API gateway (HTTPS)
+      - "8280:8280"   # API gateway (HTTP)
+    volumes:
+      - wso2_data:/home/wso2carbon/wso2am-4.3.0/repository/deployment
+
+volumes:
+  postgres_data:
+  ldap_data:
+  ldap_config:
+  wso2_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: D:\wso2_data
